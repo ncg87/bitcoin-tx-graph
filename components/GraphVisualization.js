@@ -1,4 +1,3 @@
-'use client'
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -7,19 +6,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Maximize2, RotateCcw, ZoomIn as ZoomInIcon, ZoomOut as ZoomOutIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import ForceGraph3D from 'react-force-graph-3d';
+import dynamic from 'next/dynamic';
 
-const LOD_DISTANCES = {
-  NEAR: 150,
-  MID: 300,
-  FAR: 500
-};
-
-const LOD_SETTINGS = {
-  NEAR: { nodeSize: 8, labelSize: 6, showLabels: true, showParticles: true },
-  MID: { nodeSize: 5, labelSize: 4, showLabels: true, showParticles: false },
-  FAR: { nodeSize: 2, labelSize: 0, showLabels: false, showParticles: false }
-};
+// Dynamically import ForceGraph3D with no SSR
+const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), {
+  ssr: false,
+});
 
 const GraphVisualization = () => {
   const containerRef = useRef();
@@ -34,9 +26,10 @@ const GraphVisualization = () => {
   });
   const [selectedNode, setSelectedNode] = useState(null);
   const [hoveredElement, setHoveredElement] = useState(null);
+  const [mounted, setMounted] = useState(false);
   const [dimensions, setDimensions] = useState({ 
     width: 800, 
-    height: typeof window !== 'undefined' ? window.innerHeight - 200 : 600 
+    height: 600 
   });
 
   const nodeColors = {
@@ -45,12 +38,21 @@ const GraphVisualization = () => {
     Output: '#45b7d1'
   };
 
+  // Handle client-side initialization
   useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Handle dimension updates after component is mounted
+  useEffect(() => {
+    if (!mounted) return;
+
     const updateDimensions = () => {
       if (containerRef.current) {
         const { width } = containerRef.current.getBoundingClientRect();
         setDimensions({
-          width: width,
+          width,
           height: window.innerHeight - 200 // Account for header and margins
         });
       }
@@ -72,7 +74,7 @@ const GraphVisualization = () => {
       window.removeEventListener('resize', updateDimensions);
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [mounted]);
 
   useEffect(() => {
     const fetchGraphData = async () => {
@@ -109,15 +111,15 @@ const GraphVisualization = () => {
         setGraphData({ nodes, links });
 
         // Set initial camera position after data is loaded
-        setTimeout(() => {
-          if (graphRef.current) {
+        if (mounted && graphRef.current) {
+          setTimeout(() => {
             graphRef.current.cameraPosition(
               { x: 200, y: 200, z: 300 },
               { x: 0, y: 0, z: 0 },
               2000
             );
-          }
-        }, 100);
+          }, 100);
+        }
       } catch (err) {
         console.error('Fetch error:', err);
         setError(err.message);
@@ -126,8 +128,10 @@ const GraphVisualization = () => {
       }
     };
 
-    fetchGraphData();
-  }, []);
+    if (mounted) {
+      fetchGraphData();
+    }
+  }, [mounted]);
 
   const getNodeLabel = (node) => {
     switch (node.labels[0]) {
@@ -173,17 +177,14 @@ const GraphVisualization = () => {
   const handleNodeClick = useCallback(node => {
     setSelectedNode(node);
     if (graphRef.current && node) {
-      const distance = 500;
-      // Use node's coordinates directly
+      const distance = 100;
       graphRef.current.cameraPosition(
         { 
           x: node.x + distance,
           y: node.y + distance,
           z: node.z + distance
         },
-        // Look at the node's position
         { x: node.x, y: node.y, z: node.z },
-        // Duration of transition in ms
         1000
       );
     }
@@ -203,7 +204,7 @@ const GraphVisualization = () => {
 
   if (loading) {
     return (
-      <Card className="w-full max-w-4xl">
+      <Card className="w-full">
         <CardContent className="flex items-center justify-center h-96">
           <Loader2 className="w-8 h-8 animate-spin" />
         </CardContent>
@@ -213,13 +214,23 @@ const GraphVisualization = () => {
 
   if (error) {
     return (
-      <Card className="w-full max-w-4xl">
+      <Card className="w-full">
         <CardContent>
           <Alert variant="destructive">
             <AlertDescription>
               Error loading graph data: {error}
             </AlertDescription>
           </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!mounted) {
+    return (
+      <Card className="w-full">
+        <CardContent className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin" />
         </CardContent>
       </Card>
     );
