@@ -22,7 +22,7 @@ export async function GET() {
     // Modified query to focus on transaction relationships and increase limit
     const result = await session.run(`
       MATCH (t:Transaction)
-      WITH t LIMIT 200
+      WITH t LIMIT 500
       MATCH (t)-[r]->(m)
       WHERE type(r) IN ['SPENDS', 'CREATES', 'CONTROLS']
       RETURN 
